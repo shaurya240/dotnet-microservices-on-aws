@@ -1,7 +1,10 @@
-# CloudFormation-Templates
+# Microservices on AWS
+
+## Architecture Diagram: 
+
+![Version 2 1](https://github.com/user-attachments/assets/fa4743be-c287-4771-be50-348b7a7757a6)
 
 AWS CloudFormation templates for Sample App
-
 Prerequisites:
 
 > Latest image of services in the corresponding ECR Repo.
