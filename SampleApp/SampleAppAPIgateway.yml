@@ -51,7 +51,7 @@ Resources:
         ConnectionType: VPC_LINK
         IntegrationHttpMethod: GET
         Type: HTTP
-        Uri: http://internal-SampleApp-ALB-1275065149.us-east-1.elb.amazonaws.com/policies
+        Uri: http://internal-SampleApp-ALB-XXXXX.us-east-1.elb.amazonaws.com/policies
       OperationName: ListSamplePolicyData
       ResourceId: !Ref PolicyResource
       RestApiId: !Ref SampleAppAPI
@@ -70,7 +70,7 @@ Resources:
         ConnectionType: VPC_LINK
         IntegrationHttpMethod: GET
         Type: HTTP
-        Uri: http://internal-SampleApp-ALB-1275065149.us-east-1.elb.amazonaws.com/healthstatus
+        Uri: http://internal-SampleApp-ALB-XXXXX.us-east-1.elb.amazonaws.com/healthstatus
       OperationName: ShowHealthStatus
       ResourceId: !Ref HealthstatusResource
       RestApiId: !Ref SampleAppAPI
