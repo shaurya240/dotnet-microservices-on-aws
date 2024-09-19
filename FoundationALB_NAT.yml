@@ -1,0 +1,197 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: This template creates NAT Gateways, CW log group, ALB. 
+
+#Parameters: 
+
+  #AcmCertificate:
+    #Description: The ARN of the ACM's certificate     
+    #Type: String   
+  
+Resources:
+#Creating Nat Gateway 1 and Nat Gateway 2 // Associating them with private Subnets
+
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: VPC
+      Tags:
+        - Key: Name
+          Value: EIP1-Foundation
+
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: VPC
+      Tags:
+        - Key: Name
+          Value: EIP2-Foundation
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !ImportValue FoundationVPC-PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: Foundation-NGW-PublicSubnet1
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !ImportValue FoundationVPC-PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: Foundation-NGW-PublicSubnet2
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags:
+      - Key: Name
+        Value: Private Route Table 1 | Foundation 
+      VpcId: !ImportValue FoundationVPC-VPC
+
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !ImportValue FoundationVPC-PrivateSubnet1
+  
+  PrivateSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !ImportValue FoundationVPC-PrivateSubnet3
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: Private Route Table 2 | Foundation 
+      VpcId: !ImportValue FoundationVPC-VPC
+
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+      RouteTableId: !Ref PrivateRouteTable2
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !ImportValue FoundationVPC-PrivateSubnet2
+  
+  PrivateSubnet4RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !ImportValue FoundationVPC-PrivateSubnet4
+
+#Creating ALB  
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: Foundation-ALB
+      Type: application
+      Scheme: internal
+      SecurityGroups:
+      - !ImportValue FoundationVPC-ALBSecurityGroup
+      Subnets: 
+      - !ImportValue FoundationVPC-PublicSubnet1
+      - !ImportValue FoundationVPC-PublicSubnet2
+  
+  ALBListenerNoSslCertificate:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Protocol: HTTP
+      Port: 80
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn: !Ref ALBDefaultTargetGroup
+
+  ALBDefaultTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: Foundation-Default-TG
+      TargetType: ip
+      Port: 80
+      Protocol: HTTP
+      VpcId: !ImportValue FoundationVPC-VPC
+
+  CloudWatchLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 1
+      LogGroupName: Foundation
+
+  FoundationECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties: 
+      ClusterName: Foundation
+
+  ContainerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !ImportValue FoundationVPC-VPC
+      GroupName: ContainerSecurityGroup
+      GroupDescription: Security group for Foundation-ECS
+  
+  ContainerSGInboundRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties: 
+      GroupId: !GetAtt ContainerSecurityGroup.GroupId
+      IpProtocol: tcp
+      CidrIp: 0.0.0.0/0
+      FromPort: 80
+      ToPort: 80
+    
+Outputs:
+  ALBDefaultTargetGroup: 
+    Description: Default Target group for ECS
+    Export:
+      Name: !Sub ${AWS::StackName}-ALBDefaultTargetGroup
+    Value: !Ref ALBDefaultTargetGroup
+
+  ApplicationLoadBalancerDnsName:
+    Description: ALB DNS Name
+    Export:
+      Name: !Sub ${AWS::StackName}-ApplicationLoadBalancerDnsName
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+
+  ApplicationLoadBalancerZoneID:
+    Description: ALB Canonical Hosted Zone ID
+    Export:
+      Name: !Sub ${AWS::StackName}-ApplicationLoadBalancerZoneID
+    Value: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
+
+  FoundationECSCluster:
+    Description: ECS Cluster for Foundation
+    Export:
+      Name: 'FoundationECSCluster'
+    Value: !Ref FoundationECSCluster
+
+  ALBListenerNoSslCertificate:
+    Description: listener for port 80
+    Export:
+      Name: 'ALBListenerNoSslCertificate'
+    Value: !Ref ALBListenerNoSslCertificate
+
+  ContainerSecurityGroup:
+    Description: Security group for Foundation Container
+    Export:
+      Name: 'ContainerSecurityGroup'
+    Value: !Ref ContainerSecurityGroup

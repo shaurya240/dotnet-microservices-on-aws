@@ -1,0 +1,139 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: This template creates the RDS Postgres Instance in Database Subnets
+
+Metadata:
+  AWS::CloudFormation::Interface: 
+    ParameterGroups:
+      - 
+        Label: 
+          default: Database Parameters
+        Parameters:
+          - DatabaseInstanceIdentifier
+          - DatabaseName
+          - DatabaseMasterUser
+          - DatabaseMasterPassword
+          - DatabaseBackupRetentionPeriod
+          - DatabaseAllocatedStorage
+          - DatabaseInstanceClass
+          - MultiAZDatabase
+  
+Parameters: 
+  DatabaseInstanceIdentifier:
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: Must begin with a letter and contain only Alphanumeric Characters
+    Default: FoundationPostgres
+    Description: Instance identifier name
+    MaxLength: 60
+    MinLength: 1 
+    Type: String
+
+  DatabaseName:
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: Must begin with a letter and contain only Alphanumeric Characters
+    Default: FoundationDB
+    Description: Postgres database Name
+    MaxLength: 63
+    MinLength: 1
+    Type: String
+
+  DatabaseMasterUser:
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: Must begin with a letter and contain only Alphanumeric Characters
+    Default: Admin
+    Description: Username for Postgres database access
+    MaxLength: 16
+    MinLength: 1
+    NoEcho: false
+    Type: String
+
+  DatabaseMasterPassword:
+    AllowedPattern: '[a-zA-Z0-9]*'
+    ConstraintDescription: Must contain only Alphanumeric Characters
+    Default: Admin123
+    Description: Password for Postgres database access
+    MaxLength: 128
+    MinLength: 8
+    NoEcho: true
+    Type: String
+
+  DatabaseBackupRetentionPeriod:
+    ConstraintDescription: Database backup retention period must be between 0 and 35 days
+    Default: 0
+    Description:  The number of days for which automatic DB snapshots are retained
+    MaxValue: 35
+    MinValue: 0
+    Type: Number
+
+  DatabaseAllocatedStorage:
+    ConstraintDescription: Must be between 20 and 1024 GB
+    Default: 20
+    Description: The size of the database (GB)
+    MaxValue: 65536
+    MinValue: 20
+    Type: Number
+
+  DatabaseInstanceClass:
+    AllowedValues:
+      - db.t3.micro
+      - db.t3.small
+      - db.t3.medium
+    ConstraintDescription: Must select a valid database instance type
+    Default: db.t3.micro
+    Description: The database instance type
+    Type: String
+
+  MultiAZDatabase:
+    AllowedValues:
+      - true
+      - false
+    ConstraintDescription: Must be either true or false
+    Default: false
+    Description: Creates a Multi-AZ Postgres RDS database instance
+    Type: String
+
+Resources:   
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS database
+      SubnetIds: 
+        - !ImportValue FoundationVPC-PrivateSubnet3
+        - !ImportValue FoundationVPC-PrivateSubnet4
+      Tags:
+        - Key: Name
+          Value: FoundationDatabaseSubnets 
+                                                    
+  DatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: !Ref DatabaseAllocatedStorage
+      AvailabilityZone: !Select [ 0, !GetAZs  '' ]
+      BackupRetentionPeriod: !Ref DatabaseBackupRetentionPeriod
+      DBInstanceClass: !Ref DatabaseInstanceClass
+      DBInstanceIdentifier: !Ref DatabaseInstanceIdentifier
+      DBName: !Ref DatabaseName
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      Engine: postgres
+      EngineVersion: 13.3
+      MasterUsername: !Ref DatabaseMasterUser
+      MasterUserPassword: !Ref DatabaseMasterPassword
+      MultiAZ: !Ref MultiAZDatabase
+      VPCSecurityGroups: 
+      - !Ref DatabaseSecurityGroup
+  
+  DatabaseSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Allow access to RDS Postgres
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !ImportValue ContainerSecurityGroup
+      Tags:
+        - Key: Name
+          Value: DataBase Security Group
+      VpcId: !ImportValue FoundationVPC-VPC
+
+#Outputs:

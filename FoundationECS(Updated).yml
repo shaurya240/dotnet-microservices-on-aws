@@ -1,0 +1,276 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: This template creates ECS components running Foundation Conatiners in Fargate Mode. 
+ 
+#Parameters:
+
+Resources:
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: Foundation-Execution-Role
+      Path: /
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ecs-tasks.amazonaws.com]
+            Action: [sts:AssumeRole]
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  FoundationAccountingTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: FoundationAccountingTask
+      Cpu: 256
+      Memory: 512
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+      - FARGATE
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      TaskRoleArn: arn:aws:iam::217578931327:role/AmazonECS_FullAccess
+      ContainerDefinitions:
+        - Name: Foundation-Accounting-Container
+          Image: 217578931327.dkr.ecr.us-east-1.amazonaws.com/foundationaccountingservice:latest
+          Cpu: 256
+          Memory: 512
+          PortMappings:
+            - ContainerPort: 80
+              Protocol: tcp
+          Environment:
+            - Name: ASPNETCORE_ENVIRONMENT
+              Value: Staging 
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: 'Foundation'
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: 'ECS-Accounting-TD'
+
+  FoundationCustomerTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: FoundationCustomerTask
+      Cpu: 256
+      Memory: 512
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+      - FARGATE
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      TaskRoleArn: arn:aws:iam::217578931327:role/AmazonECS_FullAccess
+      ContainerDefinitions:
+        - Name: Foundation-Customer-Container
+          Image: 217578931327.dkr.ecr.us-east-1.amazonaws.com/foundationcustomerservice:latest
+          Cpu: 256
+          Memory: 512
+          PortMappings:
+            - ContainerPort: 80
+              Protocol: tcp
+          Environment:
+            - Name: ASPNETCORE_ENVIRONMENT
+              Value: Staging 
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: 'Foundation'
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: 'ECS-Customer-TD'
+ 
+  FoundationPicklistTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: FoundationPicklistTask
+      Cpu: 256
+      Memory: 512
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+      - FARGATE
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      TaskRoleArn: arn:aws:iam::217578931327:role/AmazonECS_FullAccess
+      ContainerDefinitions:
+        - Name: Foundation-Picklist-Container
+          Image: 217578931327.dkr.ecr.us-east-1.amazonaws.com/foundationpicklistservice:latest
+          Cpu: 256
+          Memory: 512
+          PortMappings:
+            - ContainerPort: 80
+              Protocol: tcp
+          Environment:
+            - Name: ASPNETCORE_ENVIRONMENT
+              Value: Staging 
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: 'Foundation'
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: 'ECS-Picklist-TD'
+
+  FoundationAccountingService:
+    Type: AWS::ECS::Service
+    DependsOn: AccountingListenerRule
+    Properties: 
+      Cluster: !ImportValue 'FoundationECSCluster'
+      DeploymentConfiguration: 
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 2
+      LaunchType: FARGATE
+      HealthCheckGracePeriodSeconds: 10
+      LoadBalancers: 
+        - ContainerName: Foundation-Accounting-Container
+          ContainerPort: 80
+          TargetGroupArn: !Ref AccountingTargetGroup
+      NetworkConfiguration: 
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets:
+          - !ImportValue FoundationVPC-PrivateSubnet1
+          - !ImportValue FoundationVPC-PrivateSubnet2
+          SecurityGroups: 
+          - !ImportValue ContainerSecurityGroup
+      ServiceName: Foundation-Accounting-Service
+      TaskDefinition: !Ref FoundationAccountingTaskDefinition
+
+  FoundationCustomerService:
+    Type: AWS::ECS::Service
+    DependsOn: CustomerListenerRule
+    Properties: 
+      Cluster: !ImportValue 'FoundationECSCluster'
+      DeploymentConfiguration: 
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 2
+      LaunchType: FARGATE
+      HealthCheckGracePeriodSeconds: 10
+      LoadBalancers: 
+        - ContainerName: Foundation-Customer-Container
+          ContainerPort: 80
+          TargetGroupArn: !Ref CustomerTargetGroup
+      NetworkConfiguration: 
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets:
+          - !ImportValue FoundationVPC-PrivateSubnet1
+          - !ImportValue FoundationVPC-PrivateSubnet2
+          SecurityGroups: 
+          - !ImportValue ContainerSecurityGroup
+      ServiceName: Foundation-Customer-Service
+      TaskDefinition: !Ref FoundationCustomerTaskDefinition
+
+  FoundationPicklistService:
+    Type: AWS::ECS::Service
+    DependsOn: PicklistListenerRule
+    Properties: 
+      Cluster: !ImportValue 'FoundationECSCluster'
+      DeploymentConfiguration: 
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 2
+      LaunchType: FARGATE
+      HealthCheckGracePeriodSeconds: 10
+      LoadBalancers: 
+        - ContainerName: Foundation-Picklist-Container
+          ContainerPort: 80
+          TargetGroupArn: !Ref PicklistTargetGroup
+      NetworkConfiguration: 
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets:
+          - !ImportValue FoundationVPC-PrivateSubnet1
+          - !ImportValue FoundationVPC-PrivateSubnet2
+          SecurityGroups: 
+          - !ImportValue ContainerSecurityGroup
+      ServiceName: Foundation-Picklist-Service
+      TaskDefinition: !Ref FoundationPicklistTaskDefinition
+
+  AccountingTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /accounting/healthstatus
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 5
+      TargetType: ip
+      Matcher:
+        HttpCode: 200-299
+      Name: Foundation-Accounting-TG
+      Port: 80
+      Protocol: HTTP
+      VpcId: !ImportValue FoundationVPC-VPC
+  
+  CustomerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /customer/healthstatus
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 5
+      TargetType: ip
+      Matcher:
+        HttpCode: 200-299
+      Name: Foundation-Customer-TG
+      Port: 80
+      Protocol: HTTP
+      VpcId: !ImportValue FoundationVPC-VPC
+
+  PicklistTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /picklist/healthstatus
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 5
+      TargetType: ip
+      Matcher:
+        HttpCode: 200-299
+      Name: Foundation-Picklist-TG
+      Port: 80
+      Protocol: HTTP
+      VpcId: !ImportValue FoundationVPC-VPC
+
+  AccountingListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref AccountingTargetGroup
+          Type: forward
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /accounting/*
+      ListenerArn: !ImportValue ALBListenerNoSslCertificate
+      Priority: 2
+    
+  CustomerListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref CustomerTargetGroup
+          Type: forward
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /customer/*
+      ListenerArn: !ImportValue ALBListenerNoSslCertificate
+      Priority: 3
+
+  PicklistListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref PicklistTargetGroup
+          Type: forward
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /picklist/*
+      ListenerArn: !ImportValue ALBListenerNoSslCertificate
+      Priority: 4
+          
+
+#Outputs:
+ 

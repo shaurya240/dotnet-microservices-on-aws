@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: This template creates and associates NLB with a newly created VPC Link.
+
+#Metadata:
+
+#Parameters:
+
+Resources: 
+  FoundationVPCLink:
+    Type: AWS::ApiGateway::VpcLink
+    DependsOn: FoundationNLB
+    Properties:
+      Description: Creates a VPC Link 
+      Name: FoundationVPCLink
+      TargetArns: 
+        - !Ref FoundationNLB
+      
+  FoundationNLB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: Foundation-NLB
+      Type: network
+      Scheme: internal
+      Subnets: 
+      - !ImportValue FoundationVPC-PublicSubnet1
+      - !ImportValue FoundationVPC-PublicSubnet2
+
+  NLBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      TargetType: ip
+      Name: NLB-VPC-LINK-TG
+      Port: 80
+      Protocol: TCP
+      VpcId: !ImportValue FoundationVPC-VPC
+
+  NLBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      Port: 80
+      Protocol: TCP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref NLBTargetGroup
+      LoadBalancerArn: !Ref FoundationNLB
+ 
+Outputs:
+  FoundationVPCLink:
+    Description: VPC Link for Sample App APIs
+    Value: !Ref FoundationVPCLink
+    Export:
+      Name: FoundationVPCLink
+  
+  FoundationNLB:
+    Description: NLB for VPC Link
+    Value: !Ref FoundationNLB
+    Export:
+      Name: FoundationNLB
