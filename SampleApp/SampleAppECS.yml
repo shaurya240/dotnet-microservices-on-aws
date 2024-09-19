@@ -1,0 +1,112 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: This template creates ECS components running SampleApp in Fargate Mode. 
+ 
+#Parameters:
+
+Resources:
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: SampleApp-Execution-Role
+      Path: /
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ecs-tasks.amazonaws.com]
+            Action: [sts:AssumeRole]
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  SampleAppTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: SampleAppTask
+      Cpu: 256
+      Memory: 512
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+      - FARGATE
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      TaskRoleArn: arn:aws:iam::217578931327:role/AmazonECS_FullAccess
+      ContainerDefinitions:
+        - Name: SampleApp-Container
+          Image: 217578931327.dkr.ecr.us-east-1.amazonaws.com/sampleapp:latest
+          Cpu: 256
+          Memory: 512
+          PortMappings:
+            - ContainerPort: 80
+              Protocol: tcp
+          Environment:
+            - Name: ASPNETCORE_ENVIRONMENT
+              Value: Staging 
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: 'SampleApp'
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: 'ECS'
+  
+  SampleAppService:
+    Type: AWS::ECS::Service
+    DependsOn: ListenerRule
+    Properties: 
+      Cluster: !ImportValue 'SampleAppECSCluster'
+      DeploymentConfiguration: 
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 2
+      LaunchType: FARGATE
+      HealthCheckGracePeriodSeconds: 10
+      LoadBalancers: 
+        - ContainerName: SampleApp-Container
+          ContainerPort: 80
+          TargetGroupArn: !Ref ALBTargetGroup
+      NetworkConfiguration: 
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+          - !ImportValue SampleAppVPC-PrivateSubnet1
+          - !ImportValue SampleAppVPC-PrivateSubnet2
+          SecurityGroups: 
+          - !ImportValue ContainerSecurityGroup
+      ServiceName: SampleApp-Service
+      TaskDefinition: !Ref SampleAppTaskDefinition
+
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /healthstatus
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 5
+      TargetType: ip
+      Matcher:
+        HttpCode: 200-299
+      Name: SampleApp-TG1
+      Port: 80
+      Protocol: HTTP
+      VpcId: !ImportValue SampleAppVPC-VPC
+  
+  ListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref ALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /*
+      ListenerArn: !ImportValue ALBListenerNoSslCertificate
+      Priority: 2
+          
+
+#Outputs:
+ 
+
+      
+

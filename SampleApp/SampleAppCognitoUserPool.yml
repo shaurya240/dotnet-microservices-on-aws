@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: Creates and configures cognito resources for the SampleApp and also creates an Authorizer for API Gateway. 
+
+Parameters:
+  AuthName:
+    Type: String
+    Description: Unique Name for Cognito Auth Domain
+  CallbackUrl:
+    Type: String
+    Description: 
+      Enter your callback URLs that you will include in your sign in and sign
+      out requests.
+  SignoutUrl:
+    Type: String
+    Description: 
+      Enter your sign out URLs that you will include in your sign in and sign
+      out requests
+
+Resources:
+  SampleAppUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: SampleAppUserPool
+      UsernameConfiguration:
+        CaseSensitive: false
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireSymbols: true
+          RequireUppercase: true
+          TemporaryPasswordValidityDays: 1
+      UsernameAttributes:
+      - email
+      MfaConfiguration: "OFF"
+      Schema:
+        - AttributeDataType: String
+          DeveloperOnlyAttribute: false
+          Mutable: true
+          Name: email
+  
+  SampleAppUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: SampleAppCognitoClient
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      GenerateSecret: false
+      RefreshTokenValidity: '30'
+      UserPoolId: !Ref SampleAppUserPool
+      SupportedIdentityProviders:
+        - COGNITO
+      AllowedOAuthFlows:
+        - code
+        - implicit
+      AllowedOAuthScopes:
+        - email
+        - openid
+        - profile
+        - aws.cognito.signin.user.admin
+      CallbackURLs: 
+      - !Ref CallbackUrl
+      LogoutURLs: 
+      - !Ref SignoutUrl
+  
+  SampleAppUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: 
+        'Fn::Sub': '${AuthName}-sampleappclient'
+      UserPoolId: 
+        !Ref SampleAppUserPool
+
+Outputs:
+  SampleAppUserPoolId:
+    Description: Id of SampleApp User Pool
+    Value: !Ref SampleAppUserPool
+    Export:
+      Name: SampleApp-UserPoolId
+
+  SampleAppUserPoolClientId:
+    Description: Id of SampleApp User Pool client
+    Value:
+      Ref: SampleAppUserPoolClient
+    Export:
+      Name: SampleApp-UserPoolClientId
+
+  SampleAppUserPoolDomain:
+    Description: SampleUserPool Domain name
+    Value: !Ref SampleAppUserPoolDomain
+    Export:
+      Name: SampleApp-UserPoolDomain
+
+  SampleAppUserPoolRegion:
+    Description: AWS Region name
+    Value: !Ref 'AWS::Region'
+

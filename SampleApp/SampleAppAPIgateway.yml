@@ -1,0 +1,107 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: This template creates a Sample App REST API with two resources (policies & healthstatus) on API Gateway. 
+
+#Metadata:
+
+#Parameters:
+  
+Resources:
+  SampleAppAPI:
+    Type: AWS::ApiGateway::RestApi
+    Properties: 
+      EndpointConfiguration: 
+        Types: 
+          - REGIONAL
+      Description: API for our Sample App
+      FailOnWarnings: true
+      Name: SampleAppAPIs
+
+  PolicyResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId: !Ref SampleAppAPI
+      PathPart: policies    
+      ParentId: 
+        Fn::GetAtt: 
+          - SampleAppAPI
+          - RootResourceId
+
+  HealthstatusResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId: !Ref SampleAppAPI
+      PathPart: healthstatus    
+      ParentId: 
+        Fn::GetAtt: 
+          - SampleAppAPI
+          - RootResourceId
+
+  PoliciesMethodGET:
+    Type: AWS::ApiGateway::Method
+    Properties: 
+      ApiKeyRequired: false
+      AuthorizationScopes: 
+        - email
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref SampleAppAuthorizer
+      HttpMethod: GET
+      Integration: 
+        ConnectionId: !ImportValue SampleAppVPCLink
+        ConnectionType: VPC_LINK
+        IntegrationHttpMethod: GET
+        Type: HTTP
+        Uri: http://internal-SampleApp-ALB-1275065149.us-east-1.elb.amazonaws.com/policies
+      OperationName: ListSamplePolicyData
+      ResourceId: !Ref PolicyResource
+      RestApiId: !Ref SampleAppAPI
+  
+  HealthstatusMethodGET:
+    Type: AWS::ApiGateway::Method
+    Properties: 
+      ApiKeyRequired: false
+      AuthorizationScopes: 
+        - email
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref SampleAppAuthorizer
+      HttpMethod: GET
+      Integration: 
+        ConnectionId: !ImportValue SampleAppVPCLink
+        ConnectionType: VPC_LINK
+        IntegrationHttpMethod: GET
+        Type: HTTP
+        Uri: http://internal-SampleApp-ALB-1275065149.us-east-1.elb.amazonaws.com/healthstatus
+      OperationName: ShowHealthStatus
+      ResourceId: !Ref HealthstatusResource
+      RestApiId: !Ref SampleAppAPI
+  
+  #ApiGatewayModel:
+    #Type: AWS::ApiGateway::Model
+    #Properties:
+      #ContentType: 'application/json'
+      #RestApiId: !Ref SampleAppAPI
+      #Schema: {}
+          
+  SampleAppAuthorizer:
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      Type: COGNITO_USER_POOLS
+      IdentitySource: method.request.header.authorization
+      Name: SampleAppAuthorizer
+      ProviderARNs: 
+       - Fn::Join: ["", ["arn:aws:cognito-idp:", {Ref: "AWS::Region"}, ":", {Ref: "AWS::AccountId"}, ":userpool/", !ImportValue SampleApp-UserPoolId]]
+      RestApiId: !Ref SampleAppAPI
+
+  SampleAppAPIDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: PoliciesMethodGET
+    Properties:
+      RestApiId: !Ref SampleAppAPI
+      StageName: Test
+     
+Outputs:
+  SampleAppAPIId:
+    Description: SampleApp Rest API ID
+    Value: !Ref SampleAppAPI
+    Export:
+      Name: SampleAppAPI-id
